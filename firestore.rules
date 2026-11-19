@@ -1,0 +1,313 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: default-deny all unmatched paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Reusable Hardened Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    function spaceExists(userId, spaceId) {
+      return exists(/databases/$(database)/documents/users/$(userId)/spaces/$(spaceId));
+    }
+
+    // --- Entity Validation Blueprints ---
+
+    function isValidHabitSpace(data, userId) {
+      return data.userId == userId &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 60 &&
+        data.archetype is string && data.archetype in ['DOOMSCROLLING', 'NICOTINE', 'SUGAR', 'GAMING', 'SPENDING', 'CUSTOM'] &&
+        data.iconKey is string && data.iconKey.size() >= 1 && data.iconKey.size() <= 30 &&
+        data.dailyCostUsd is number && data.dailyCostUsd >= 0 && data.dailyCostUsd <= 10000 &&
+        data.dailyHoursSaved is number && data.dailyHoursSaved >= 0 && data.dailyHoursSaved <= 24 &&
+        data.currentStreakDays is int && data.currentStreakDays >= 0 && data.currentStreakDays <= 100000 &&
+        data.longestStreakDays is int && data.longestStreakDays >= 0 && data.longestStreakDays <= 100000 &&
+        data.totalCleanDays is int && data.totalCleanDays >= 0 && data.totalCleanDays <= 100000 &&
+        data.claimedBudgetUsd is number && data.claimedBudgetUsd >= 0 && data.claimedBudgetUsd <= 10000000 &&
+        data.lastCheckInDate is string && data.lastCheckInDate.size() <= 16 &&
+        data.lastCheckInOutcome is string && data.lastCheckInOutcome in ['NONE', 'CLEAN', 'MILD_URGE', 'RELAPSE'] &&
+        data.ritualStatusNote is string && data.ritualStatusNote.size() <= 160 &&
+        isValidTimestamp(data.createdAt) &&
+        isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidCheckInLog(data, userId, spaceId, dateKey) {
+      return data.userId == userId &&
+        data.spaceId == spaceId &&
+        data.dateKey == dateKey &&
+        data.dateKey is string && data.dateKey.size() >= 1 && data.dateKey.size() <= 16 &&
+        data.outcome is string && data.outcome in ['CLEAN', 'MILD_URGE', 'RELAPSE'] &&
+        data.urgeLevel is int && data.urgeLevel >= 0 && data.urgeLevel <= 10 &&
+        data.peakUrgeWindow is string && data.peakUrgeWindow.size() <= 60 &&
+        data.reflectionNote is string && data.reflectionNote.size() <= 500 &&
+        isValidTimestamp(data.createdAt) &&
+        isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidGrowthTask(data, userId, spaceId) {
+      return data.userId == userId &&
+        data.spaceId == spaceId &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+        data.subtitle is string && data.subtitle.size() <= 120 &&
+        data.category is string && data.category in ['NON_NEGOTIABLE', 'TODO', 'NOT_TO_DO'] &&
+        data.iconKey is string && data.iconKey.size() >= 1 && data.iconKey.size() <= 30 &&
+        data.completedDate is string && data.completedDate.size() <= 16 &&
+        data.sortOrder is int && data.sortOrder >= 0 && data.sortOrder <= 10000 &&
+        isValidTimestamp(data.createdAt) &&
+        isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidRewardGoal(data, userId, spaceId) {
+      return data.userId == userId &&
+        data.spaceId == spaceId &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 100 &&
+        data.subtitle is string && data.subtitle.size() <= 160 &&
+        data.targetDays is int && data.targetDays >= 1 && data.targetDays <= 3650 &&
+        data.budgetUsd is number && data.budgetUsd >= 1 && data.budgetUsd <= 1000000 &&
+        data.coverPresetKey is string && data.coverPresetKey.size() >= 1 && data.coverPresetKey.size() <= 40 &&
+        (!('localImageUri' in data) || (data.localImageUri is string && data.localImageUri.size() <= 500)) &&
+        data.redeemed is bool &&
+        (!('redeemedAt' in data) || isValidTimestamp(data.redeemedAt)) &&
+        isValidTimestamp(data.createdAt) &&
+        isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidSavedInsight(data, userId, spaceId) {
+      return data.userId == userId &&
+        data.spaceId == spaceId &&
+        data.quote is string && data.quote.size() >= 1 && data.quote.size() <= 600 &&
+        data.author is string && data.author.size() >= 1 && data.author.size() <= 120 &&
+        data.source is string && data.source.size() <= 120 &&
+        data.reflectionNote is string && data.reflectionNote.size() <= 1000 &&
+        data.bookmarked is bool &&
+        isValidTimestamp(data.createdAt) &&
+        isValidTimestamp(data.updatedAt);
+    }
+
+    // --- Collection Rules ---
+
+    match /users/{userId}/spaces/{spaceId} {
+      allow list: if isOwner(userId);
+      allow get: if isOwner(userId) && isValidId(spaceId);
+
+      allow create: if isOwner(userId) &&
+        isValidId(spaceId) &&
+        incoming().keys().hasAll([
+          'userId', 'title', 'archetype', 'iconKey', 'dailyCostUsd',
+          'dailyHoursSaved', 'currentStreakDays', 'longestStreakDays',
+          'totalCleanDays', 'claimedBudgetUsd', 'lastCheckInDate',
+          'lastCheckInOutcome', 'ritualStatusNote', 'createdAt', 'updatedAt'
+        ]) &&
+        incoming().keys().hasOnly([
+          'userId', 'title', 'archetype', 'iconKey', 'dailyCostUsd',
+          'dailyHoursSaved', 'currentStreakDays', 'longestStreakDays',
+          'totalCleanDays', 'claimedBudgetUsd', 'lastCheckInDate',
+          'lastCheckInOutcome', 'ritualStatusNote', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidHabitSpace(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+        isValidId(spaceId) &&
+        isValidHabitSpace(incoming(), userId) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        (
+          // Action 1: Record check-in streak/status progression
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'currentStreakDays', 'longestStreakDays', 'totalCleanDays',
+            'lastCheckInDate', 'lastCheckInOutcome', 'ritualStatusNote', 'updatedAt'
+          ]) ||
+          // Action 2: Update valuation settings or title/note
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'title', 'dailyCostUsd', 'dailyHoursSaved', 'ritualStatusNote', 'updatedAt'
+          ]) ||
+          // Action 3: Claim reward budget deduction
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'claimedBudgetUsd', 'updatedAt'
+          ])
+        );
+
+      allow delete: if isOwner(userId) && isValidId(spaceId);
+
+      // Subcollection: Daily Check-In Logs
+      match /checkIns/{dateKey} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(spaceId) && isValidId(dateKey);
+
+        allow create: if isOwner(userId) &&
+          isValidId(spaceId) &&
+          isValidId(dateKey) &&
+          incoming().keys().hasAll([
+            'userId', 'spaceId', 'dateKey', 'outcome', 'urgeLevel',
+            'peakUrgeWindow', 'reflectionNote', 'createdAt', 'updatedAt'
+          ]) &&
+          incoming().keys().hasOnly([
+            'userId', 'spaceId', 'dateKey', 'outcome', 'urgeLevel',
+            'peakUrgeWindow', 'reflectionNote', 'createdAt', 'updatedAt'
+          ]) &&
+          isValidCheckInLog(incoming(), userId, spaceId, dateKey) &&
+          spaceExists(userId, spaceId);
+
+        allow update: if isOwner(userId) &&
+          isValidId(spaceId) &&
+          isValidId(dateKey) &&
+          isValidCheckInLog(incoming(), userId, spaceId, dateKey) &&
+          incoming().userId == existing().userId &&
+          incoming().spaceId == existing().spaceId &&
+          incoming().dateKey == existing().dateKey &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'outcome', 'urgeLevel', 'peakUrgeWindow', 'reflectionNote', 'updatedAt'
+          ]);
+
+        allow delete: if isOwner(userId) && isValidId(spaceId) && isValidId(dateKey);
+      }
+
+      // Subcollection: Growth Daily Architecture Tasks
+      match /tasks/{taskId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(spaceId) && isValidId(taskId);
+
+        allow create: if isOwner(userId) &&
+          isValidId(spaceId) &&
+          isValidId(taskId) &&
+          incoming().keys().hasAll([
+            'userId', 'spaceId', 'title', 'subtitle', 'category',
+            'iconKey', 'completedDate', 'sortOrder', 'createdAt', 'updatedAt'
+          ]) &&
+          incoming().keys().hasOnly([
+            'userId', 'spaceId', 'title', 'subtitle', 'category',
+            'iconKey', 'completedDate', 'sortOrder', 'createdAt', 'updatedAt'
+          ]) &&
+          isValidGrowthTask(incoming(), userId, spaceId) &&
+          spaceExists(userId, spaceId);
+
+        allow update: if isOwner(userId) &&
+          isValidId(spaceId) &&
+          isValidId(taskId) &&
+          isValidGrowthTask(incoming(), userId, spaceId) &&
+          incoming().userId == existing().userId &&
+          incoming().spaceId == existing().spaceId &&
+          incoming().createdAt == existing().createdAt &&
+          (
+            // Action 1: Toggle daily completion
+            incoming().diff(existing()).affectedKeys().hasOnly(['completedDate', 'updatedAt']) ||
+            // Action 2: Reclassify task between Pillars, To-do, and Not-to-do
+            incoming().diff(existing()).affectedKeys().hasOnly(['category', 'updatedAt']) ||
+            // Action 3: Edit task details
+            incoming().diff(existing()).affectedKeys().hasOnly(['title', 'subtitle', 'iconKey', 'category', 'sortOrder', 'updatedAt'])
+          );
+
+        allow delete: if isOwner(userId) && isValidId(spaceId) && isValidId(taskId);
+      }
+
+      // Subcollection: Vision Board Reward Goals
+      match /rewards/{rewardId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(spaceId) && isValidId(rewardId);
+
+        allow create: if isOwner(userId) &&
+          isValidId(spaceId) &&
+          isValidId(rewardId) &&
+          incoming().keys().hasAll([
+            'userId', 'spaceId', 'title', 'subtitle', 'targetDays',
+            'budgetUsd', 'coverPresetKey', 'redeemed', 'createdAt', 'updatedAt'
+          ]) &&
+          incoming().keys().hasOnly([
+            'userId', 'spaceId', 'title', 'subtitle', 'targetDays',
+            'budgetUsd', 'coverPresetKey', 'localImageUri', 'redeemed', 'redeemedAt',
+            'createdAt', 'updatedAt'
+          ]) &&
+          incoming().redeemed == false &&
+          !('redeemedAt' in incoming()) &&
+          isValidRewardGoal(incoming(), userId, spaceId) &&
+          spaceExists(userId, spaceId);
+
+        allow update: if isOwner(userId) &&
+          isValidId(spaceId) &&
+          isValidId(rewardId) &&
+          isValidRewardGoal(incoming(), userId, spaceId) &&
+          incoming().userId == existing().userId &&
+          incoming().spaceId == existing().spaceId &&
+          incoming().createdAt == existing().createdAt &&
+          // Terminal state lock: redeemed rewards cannot be modified or un-redeemed
+          existing().redeemed == false &&
+          (
+            // Action 1: Claim and redeem reward (transitions redeemed false -> true)
+            (
+              incoming().redeemed == true &&
+              'redeemedAt' in incoming() &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['redeemed', 'redeemedAt', 'updatedAt'])
+            ) ||
+            // Action 2: Edit unredeemed reward details
+            (
+              incoming().redeemed == false &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'title', 'subtitle', 'targetDays', 'budgetUsd', 'coverPresetKey', 'localImageUri', 'updatedAt'
+              ])
+            )
+          );
+
+        allow delete: if isOwner(userId) && isValidId(spaceId) && isValidId(rewardId);
+      }
+
+      // Subcollection: Bookmarked Mindful Anchor Insights
+      match /savedInsights/{insightId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(spaceId) && isValidId(insightId);
+
+        allow create: if isOwner(userId) &&
+          isValidId(spaceId) &&
+          isValidId(insightId) &&
+          incoming().keys().hasAll([
+            'userId', 'spaceId', 'quote', 'author', 'source',
+            'reflectionNote', 'bookmarked', 'createdAt', 'updatedAt'
+          ]) &&
+          incoming().keys().hasOnly([
+            'userId', 'spaceId', 'quote', 'author', 'source',
+            'reflectionNote', 'bookmarked', 'createdAt', 'updatedAt'
+          ]) &&
+          isValidSavedInsight(incoming(), userId, spaceId) &&
+          spaceExists(userId, spaceId);
+
+        allow update: if isOwner(userId) &&
+          isValidId(spaceId) &&
+          isValidId(insightId) &&
+          isValidSavedInsight(incoming(), userId, spaceId) &&
+          incoming().userId == existing().userId &&
+          incoming().spaceId == existing().spaceId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'reflectionNote', 'bookmarked', 'updatedAt'
+          ]);
+
+        allow delete: if isOwner(userId) && isValidId(spaceId) && isValidId(insightId);
+      }
+    }
+  }
+}

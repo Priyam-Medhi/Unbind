@@ -1,0 +1,6 @@
+{
+  "name": "Unbind",
+  "description": "Warm minimalist habit recovery sanctuary with isolated Focus Spaces, cloud-synced streaks, daily architecture, savings rewards, and Gemini AI coaching.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

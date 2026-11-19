@@ -1,0 +1,195 @@
+{
+  "entities": {
+    "HabitSpace": {
+      "title": "HabitSpace",
+      "description": "An isolated recovery workspace for a single habit or addiction being gently unbound.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID." },
+        "title": { "type": "string", "description": "Display name of the habit space (1-60 chars)." },
+        "archetype": {
+          "type": "string",
+          "enum": ["DOOMSCROLLING", "NICOTINE", "SUGAR", "GAMING", "SPENDING", "CUSTOM"],
+          "description": "Habit archetype category."
+        },
+        "iconKey": { "type": "string", "description": "Icon identifier key for the space." },
+        "dailyCostUsd": { "type": "number", "description": "Estimated daily cost saved in USD." },
+        "dailyHoursSaved": { "type": "number", "description": "Estimated daily hours reclaimed." },
+        "currentStreakDays": { "type": "integer", "description": "Current consecutive clean days." },
+        "longestStreakDays": { "type": "integer", "description": "Longest recorded clean streak." },
+        "totalCleanDays": { "type": "integer", "description": "Total cumulative clean days logged." },
+        "claimedBudgetUsd": { "type": "number", "description": "Total USD already redeemed on rewards." },
+        "lastCheckInDate": { "type": "string", "description": "Most recent check-in date key (YYYY-MM-DD or empty)." },
+        "lastCheckInOutcome": {
+          "type": "string",
+          "enum": ["NONE", "CLEAN", "MILD_URGE", "RELAPSE"],
+          "description": "Most recent check-in outcome."
+        },
+        "ritualStatusNote": { "type": "string", "description": "Latest ritual status summary shown on the hub card." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." }
+      },
+      "required": [
+        "userId",
+        "title",
+        "archetype",
+        "iconKey",
+        "dailyCostUsd",
+        "dailyHoursSaved",
+        "currentStreakDays",
+        "longestStreakDays",
+        "totalCleanDays",
+        "claimedBudgetUsd",
+        "lastCheckInDate",
+        "lastCheckInOutcome",
+        "ritualStatusNote",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CheckInLog": {
+      "title": "CheckInLog",
+      "description": "A daily clean or relapse check-in entry inside a Focus Space.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID." },
+        "spaceId": { "type": "string", "description": "Parent HabitSpace document ID." },
+        "dateKey": { "type": "string", "description": "ISO date key YYYY-MM-DD." },
+        "outcome": {
+          "type": "string",
+          "enum": ["CLEAN", "MILD_URGE", "RELAPSE"],
+          "description": "Daily check-in outcome."
+        },
+        "urgeLevel": { "type": "integer", "description": "Self-reported urge intensity from 0 to 10." },
+        "peakUrgeWindow": { "type": "string", "description": "Time window when urges peaked." },
+        "reflectionNote": { "type": "string", "description": "Optional mindful reflection note." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." }
+      },
+      "required": [
+        "userId",
+        "spaceId",
+        "dateKey",
+        "outcome",
+        "urgeLevel",
+        "peakUrgeWindow",
+        "reflectionNote",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "GrowthTask": {
+      "title": "GrowthTask",
+      "description": "A daily architecture item categorized into Non-negotiables, To-do List, or Not-to-do List.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID." },
+        "spaceId": { "type": "string", "description": "Parent HabitSpace document ID." },
+        "title": { "type": "string", "description": "Task or boundary title." },
+        "subtitle": { "type": "string", "description": "Short anchor tag or rationale." },
+        "category": {
+          "type": "string",
+          "enum": ["NON_NEGOTIABLE", "TODO", "NOT_TO_DO"],
+          "description": "Daily Architecture anchor bucket."
+        },
+        "iconKey": { "type": "string", "description": "Icon identifier key." },
+        "completedDate": { "type": "string", "description": "YYYY-MM-DD when last completed, or empty string." },
+        "sortOrder": { "type": "integer", "description": "Display ordering index." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." }
+      },
+      "required": [
+        "userId",
+        "spaceId",
+        "title",
+        "subtitle",
+        "category",
+        "iconKey",
+        "completedDate",
+        "sortOrder",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "RewardGoal": {
+      "title": "RewardGoal",
+      "description": "A Vision Board milestone reward funded by habit savings.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID." },
+        "spaceId": { "type": "string", "description": "Parent HabitSpace document ID." },
+        "title": { "type": "string", "description": "Reward title." },
+        "subtitle": { "type": "string", "description": "Milestone subtitle or inspiration." },
+        "targetDays": { "type": "integer", "description": "Clean days required to unlock." },
+        "budgetUsd": { "type": "number", "description": "Reward budget in USD." },
+        "coverPresetKey": { "type": "string", "description": "Bundled warm artwork preset key." },
+        "localImageUri": { "type": "string", "description": "Optional user-selected Photo Picker URI." },
+        "redeemed": { "type": "boolean", "description": "Whether the reward has been claimed and redeemed." },
+        "redeemedAt": { "type": "string", "format": "date-time", "description": "Server timestamp when redeemed." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." }
+      },
+      "required": [
+        "userId",
+        "spaceId",
+        "title",
+        "subtitle",
+        "targetDays",
+        "budgetUsd",
+        "coverPresetKey",
+        "redeemed",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "SavedInsight": {
+      "title": "SavedInsight",
+      "description": "A bookmarked mindful anchor quote and personal reflection within a Focus Space.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID." },
+        "spaceId": { "type": "string", "description": "Parent HabitSpace document ID." },
+        "quote": { "type": "string", "description": "Anchor quote text." },
+        "author": { "type": "string", "description": "Quote author." },
+        "source": { "type": "string", "description": "Book or framework attribution." },
+        "reflectionNote": { "type": "string", "description": "User's personal reflection note." },
+        "bookmarked": { "type": "boolean", "description": "Bookmark status." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." }
+      },
+      "required": [
+        "userId",
+        "spaceId",
+        "quote",
+        "author",
+        "source",
+        "reflectionNote",
+        "bookmarked",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/spaces/{spaceId}": {
+      "schema": { "$ref": "#/entities/HabitSpace" },
+      "description": "Isolated Focus Spaces owned by a specific authenticated user."
+    },
+    "/users/{userId}/spaces/{spaceId}/checkIns/{dateKey}": {
+      "schema": { "$ref": "#/entities/CheckInLog" },
+      "description": "Daily recovery check-ins scoped to a single Focus Space."
+    },
+    "/users/{userId}/spaces/{spaceId}/tasks/{taskId}": {
+      "schema": { "$ref": "#/entities/GrowthTask" },
+      "description": "Daily Architecture tasks (Non-negotiables, To-dos, Not-to-dos) scoped to a Focus Space."
+    },
+    "/users/{userId}/spaces/{spaceId}/rewards/{rewardId}": {
+      "schema": { "$ref": "#/entities/RewardGoal" },
+      "description": "Vision Board savings rewards scoped to a Focus Space."
+    },
+    "/users/{userId}/spaces/{spaceId}/savedInsights/{insightId}": {
+      "schema": { "$ref": "#/entities/SavedInsight" },
+      "description": "Bookmarked mindful anchor quotes and reflections scoped to a Focus Space."
+    }
+  }
+}
